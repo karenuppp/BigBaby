@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel数据查询系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            overflow-x: auto;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+            width: fit-content;
+            min-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+        }
+        .left-column {
+            width: 600px;
+            flex-shrink: 0;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        .right-column {
+            width: 560px;
+            flex-shrink: 0;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        .column-title {
+            margin: 0 0 20px;
+            font-size: 1.5em;
+            color: #333;
+        }
+        .file-input {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .file-input input[type="file"] { display: none; }
+        .btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.3s;
+            font-size: 14px;
+            background-color: #4CAF50;
+            color: white;
+        }
+        .btn:hover { background-color: #45a049; }
+        .file-name {
+            color: #666;
+            font-size: 14px;
+            margin: 0 10px;
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        select, input {
+            padding: 8px 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            background-color: white;
+        }
+        select:hover, select:focus {
+            border-color: #4CAF50;
+            outline: none;
+        }
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .search-box select {
+            flex: 2;
+            min-width: 150px;
+        }
+        .search-box input {
+            flex: 2;
+            min-width: 150px;
+        }
+        .search-box #matchType {
+            flex: 1;
+            min-width: 120px;
+        }
+        .table-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            overflow-x: auto;
+        }
+        .table-tab {
+            padding: 8px 15px;
+            background-color: #f0f0f0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+        .table-tab.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .table-container {
+            overflow-x: auto;
+            max-height: 600px;
+        }
+        table {
+            width: max-content;
+            min-width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th { background-color: #f2f2f2; }
+        .highlight { background-color: #e3f2fd; }
+        .highlight span { background-color: #ffeb3b; }
+        .table-container::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .table-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        .table-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        .left-column.expanded {
+            width: max-content;
+            margin-right: 20px;
+        }
+        .right-column.expanded {
+            width: max-content;
+            margin-left: 20px;
+        }
+        .right-column > * {
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="left-column">
+            <h2 class="column-title">数据展示区</h2>
+            <div class="file-input">
+                <label for="fileInput" class="btn">选择文件</label>
+                <input type="file" id="fileInput" accept=".xlsx, .xls" multiple onchange="showFileName()">
+                <span id="fileName" class="file-name"></span>
+                <button class="btn" onclick="importExcel()">导入Excel</button>
+            </div>
+            <div id="tableTabs" class="table-tabs"></div>
+            <div id="allTables" class="table-container"></div>
+        </div>
+        <div class="right-column">
+            <h2 class="column-title">搜索区</h2>
+            <div class="search-box">
+                <select id="tableSelect">
+                    <option value="">选择表格</option>
+                </select>
+                <input type="text" id="searchInput" placeholder="请输入搜索内容">
+                <select id="matchType">
+                    <option value="exact">完全匹配</option>
+                    <option value="partial">不完全匹配</option>
+                </select>
+                <button class="btn" onclick="searchData()">搜索</button>
+            </div>
+            <div id="resultTable" style="display: none;overflow-x: auto;">
+                <table>
+                    <thead id="resultHeader"></thead>
+                    <tbody id="resultBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <script>
+        const tableData = {};
+
+        function showFileName() {
+            const fileInput = document.getElementById('fileInput');
+            const fileNameSpan = document.getElementById('fileName');
+            const files = fileInput.files;
+            fileNameSpan.textContent = files.length ? Array.from(files).map(file => file.name).join(', ') : '';
+        }
+
+        function importExcel() {
+            const fileInput = document.getElementById('fileInput');
+            const files = fileInput.files;
+            
+            if (!files.length) {
+                alert('请先选择文件');
+                return;
+            }
+
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
+                        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                        
+                        if (!jsonData.length) throw new Error('表格数据为空');
+
+                        const tableId = 'table_' + Date.now();
+                        tableData[tableId] = {
+                            name: file.name,
+                            headers: Object.keys(jsonData[0]),
+                            data: jsonData
+                        };
+
+                        createTable(tableId);
+                        updateTableList();
+                    } catch (error) {
+                        alert('文件导入失败: ' + error.message);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function createTable(tableId) {
+            const tab = document.createElement('button');
+            tab.className = 'table-tab';
+            tab.textContent = tableData[tableId].name;
+            tab.onclick = () => switchTable(tableId);
+            document.getElementById('tableTabs').appendChild(tab);
+
+            const tableDiv = document.createElement('div');
+            tableDiv.id = tableId;
+            tableDiv.className = 'table-content';
+            tableDiv.style.display = 'none';
+
+            const tableHtml = `
+                <table>
+                    <thead>
+                        <tr>${tableData[tableId].headers.map(h => `<th>${h}</th>`).join('')}</tr>
+                    </thead>
+                    <tbody>
+                        ${tableData[tableId].data.map(row => `
+                            <tr>${tableData[tableId].headers.map(h => `<td>${row[h] || ''}</td>`).join('')}</tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            tableDiv.innerHTML = tableHtml;
+            document.getElementById('allTables').appendChild(tableDiv);
+            switchTable(tableId);
+        }
+
+        function switchTable(tableId) {
+            document.querySelectorAll('.table-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.table-content').forEach(content => content.style.display = 'none');
+
+            const currentTab = Array.from(document.querySelectorAll('.table-tab'))
+                .find(tab => tab.textContent === tableData[tableId].name);
+            if (currentTab) currentTab.classList.add('active');
+
+            const currentTable = document.getElementById(tableId);
+            if (currentTable) currentTable.style.display = 'block';
+        }
+
+        function updateTableList() {
+            const select = document.getElementById('tableSelect');
+            select.innerHTML = '<option value="">选择表格</option>' +
+                Object.entries(tableData).map(([id, data]) => `<option value="${id}">${data.name}</option>`).join('');
+        }
+
+        function searchData() {
+            const tableId = document.getElementById('tableSelect').value;
+            if (!tableId) {
+                alert('请先选择要搜索的表格');
+                return;
+            }
+
+            const searchValue = document.getElementById('searchInput').value.trim();
+            if (!searchValue) {
+                alert('请输入搜索内容');
+                return;
+            }
+
+            const matchType = document.getElementById('matchType').value;
+            const searchTerm = searchValue.toLowerCase();
+
+            const found = tableData[tableId].data.filter(row => 
+                Object.values(row).some(value => {
+                    if (!value) return false;
+                    const cellValue = value.toString().toLowerCase();
+                    return matchType === 'exact' ? cellValue === searchTerm : cellValue.includes(searchTerm);
+                })
+            );
+
+            if (found.length) {
+                displaySearchResults(tableId, found, searchValue, matchType);
+            } else {
+                document.getElementById('resultTable').style.display = 'none';
+                alert('未找到匹配的记录');
+            }
+        }
+
+        function displaySearchResults(tableId, found, searchValue, matchType) {
+            const headers = tableData[tableId].headers;
+            
+            document.getElementById('resultHeader').innerHTML = `
+                <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
+            `;
+
+            document.getElementById('resultBody').innerHTML = found.map(row => `
+                <tr>${headers.map(h => {
+                    const value = row[h]?.toString() || '';
+                    const cellText = value.toLowerCase();
+                    const searchTerm = searchValue.toLowerCase();
+                    
+                    if (matchType === 'partial' && cellText.includes(searchTerm)) {
+                        return `<td>${value.replace(new RegExp(searchValue, 'gi'), 
+                            match => `<span class="highlight">${match}</span>`)}</td>`;
+                    }
+                    return `<td${cellText === searchTerm ? ' class="highlight"' : ''}>${value}</td>`;
+                }).join('')}</tr>
+            `).join('');
+
+            document.getElementById('resultTable').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
